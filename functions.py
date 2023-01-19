@@ -1,4 +1,5 @@
 import pandas as pd
+import time
 import requests
 from datetime import datetime
 import math
@@ -12,6 +13,108 @@ from dotenv import load_dotenv
 import random
 import tempfile
 import os
+import statistics
+
+
+
+def run(save_image_jpg = False, save_image_svg = False, post_instagram = False, block_heigth = None):
+
+    load_dotenv('.env')
+
+    # load insta username and password
+    username = os.getenv('USERNAME')
+    password = os.getenv('PASSWORD')
+    secret_size_factor = os.getenv('SECRET_SIZE_FACTOR') # Secret parameter "secret_size_factor" for unique picture
+    secret_seed = os.getenv('SECRET_SEED') # Secret parameter "secret_seed" for unique picture
+
+    # load specific block / to load latest just leave "None"
+    block_heigth = block_heigth
+
+    # load block
+    if block_heigth is None:
+        # code to run if variable is None
+        block = get_block_data(get_latest_block_height())
+        print("loaded newest block")
+    else:
+        # code to run if variable is not None
+        block = get_block_data(block_heigth)
+        print(f"loaded block {block_heigth}")
+
+
+    # extract main values
+    block_hash = block['blocks'][0]['hash']
+    block_height = block['blocks'][0]['height']
+    block_tx_count = block['blocks'][0]['n_tx']
+    block_fee = block['blocks'][0]['fee']
+    block_time = block['blocks'][0]['time']
+    block_datetime = convert_timestamp_to_datetime(block_time)
+    print(block_datetime)
+
+    color_first = '#'+ block_hash[-6:]
+    print("first color: ",color_first)
+    color_second = generate_second_color(color_first,seed=21)
+    print("second color: ",color_second)
+
+    # get transaction dataframe for the block
+    df_transactions = get_transaction_data(block_height)
+    df_transaction_min = min(df_transactions.value_outs_sum_btc)
+    df_transaction_max = max(df_transactions.value_outs_sum_btc)
+    df_transaction_max = round(df_transaction_max,1)
+    print(df_transaction_min,'=',df_transaction_max)
+
+    # get transaction values as list in btc
+    transaction_values = list(df_transactions.value_outs_sum_btc)
+    transaction_fees = list(df_transactions.transaction_fee)
+    transaction_fees_median = statistics.median(transaction_fees)
+    sats_vb = transaction_fees_median / block['blocks'][0]['n_tx']*10
+    sats_vb = round(sats_vb, 0)
+    print(transaction_fees_median)
+    print(sats_vb)
+
+
+    # create image
+    image = create_image(
+        width = 9504,
+        height = 9504,
+        color1 = color_first,
+        color2 = color_second,
+        number_of_circles = block_tx_count,
+        block_height = block_height,
+        backgroundcolor = '#000000',
+        transaction_values = transaction_values,
+        size_factor = int(secret_size_factor),
+        seed = int(secret_seed),
+        )
+    
+    if save_image_jpg is True:
+        image.save(f'images/block_{block_height}.jpg')
+
+    
+    image_svg = create_image_svg(
+        width = 9504,
+        height = 9504,
+        color1 = color_first,
+        color2 = color_second,
+        number_of_circles = block_tx_count,
+        block_height = block_height,
+        backgroundcolor = '#000000',
+        transaction_values = transaction_values,
+        size_factor = int(secret_size_factor),
+        seed = int(secret_seed),
+        transparency = 70,
+        )
+
+    if save_image_svg is True:
+        image_svg.saveas(f'images/block_{block_height}.svg')
+    
+
+    if post_instagram is True:
+        # create instagram caption
+        caption = caption = f'#Bitcoin Block {block_height} at {block_datetime} had {block_tx_count} transactions and a average fee of ~ {sats_vb} sats/vB. The biggest transfer of a single transaction was {df_transaction_max} Bitcoin.'
+        print(caption)
+        #post on instagram
+        post_image_on_instagram(image=image, caption=caption,username=username,password=password)
+
 
 
 def get_latest_block_hash() -> str:
@@ -163,25 +266,6 @@ def generate_second_color(color, seed=None):
     return second_color
 
 
-# def generate_second_color(color, seed=None):
-#     # Generate a second color that is slightly different from the base color
-#     r, g, b = int(color[1:3], 16), int(color[3:5], 16), int(color[5:7], 16)
-    
-#     # Set the seed value for the random number generator
-#     if seed:
-#         random.seed(seed)
-    
-#     # Randomly adjust one of the color channels
-#     channel = random.choice(["r", "g", "b"])
-#     if channel == "r":
-#         r = (r + random.randint(0, 255)) % 255
-#     elif channel == "g":
-#         g = (g + random.randint(0, 255)) % 255
-#     else:
-#         b = (b + random.randint(0, 255)) % 255
-#     second_color = "#{:02x}{:02x}{:02x}".format(r, g, b)
-#     return second_color
-
 
 def create_image(width: int, height: int, color1: str, color2: str, number_of_circles: int, block_height: int, backgroundcolor: str, transaction_values: list,size_factor: int,seed=None):
 
@@ -221,7 +305,48 @@ def create_image(width: int, height: int, color1: str, color2: str, number_of_ci
     return image
 
 
+import random
+from svgwrite import Drawing
+from svgwrite.shapes import Circle
+from svgwrite.utils import rgb
 
+
+def create_image_svg(width: int, height: int, color1: str, color2: str, number_of_circles: int, block_height: int, backgroundcolor: str, transaction_values: list, size_factor: int, transparency: int = 100, seed=None):
+    # Set the seed value for the random number generator
+    if seed:
+        random.seed(seed)
+
+    color1_rgb = webcolors.hex_to_rgb(color1)
+    color2_rgb = webcolors.hex_to_rgb(color2)
+    backgroundcolor_rgb = webcolors.hex_to_rgb(backgroundcolor)
+
+    dwg = Drawing(size=(width, height))
+
+    # Create a black background rectangle
+    dwg.add(dwg.rect((0,0), (width,height), fill='black'))
+    
+    center_x = width // 2
+    center_y = height // 2
+    cube_size = width/2.5
+
+    for i in transaction_values:
+
+        circle_radius =  get_radius_from_area(i*size_factor)
+
+        x = center_x + random.uniform(-cube_size+circle_radius, cube_size-circle_radius)
+        y = center_y + random.uniform(-cube_size+circle_radius, cube_size-circle_radius)
+
+        percent_x = x / width
+        percent_y = y / height
+        percent_x_y = percent_x + percent_y
+        red = color1_rgb[0] + (color2_rgb[0] - color1_rgb[0]) * percent_x_y
+        green = color1_rgb[1] + (color2_rgb[1] - color1_rgb[1]) * percent_x_y
+        blue = color1_rgb[2] + (color2_rgb[2] - color1_rgb[2]) * percent_x_y
+        circle_color = rgb(red, green, blue)
+        circle = Circle(center=(x, y), r=circle_radius, fill=circle_color, fill_opacity= transparency/100)
+        dwg.add(circle)
+
+    return dwg
 
 
 def scale_image (image, width, height):
@@ -262,3 +387,19 @@ def post_image_on_instagram(image, caption, username=None, password=None):
     cl.photo_upload(filepath, caption=caption)
     cl.logout()
     os.remove(filepath)
+
+
+def generate_gif(folder_path):
+    frames = []
+    # Get all file names in the specified folder
+    file_names = os.listdir(folder_path)
+    file_names.sort()
+    # Load each image and add it to the frames list
+    for file_name in file_names:
+        if file_name.endswith(".jpg"):
+            file_path = os.path.join(folder_path, file_name)
+            frames.append(Image.open(file_path))
+    # Save the frames as an animated GIF
+    frames[0].save('animated.gif', format='gif', save_all=True, append_images=frames[1:])
+
+
