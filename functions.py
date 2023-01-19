@@ -183,7 +183,7 @@ def generate_second_color(color, seed=None):
 #     return second_color
 
 
-def create_image(width: int, height: int, color1: str, color2: str, number_of_circles: int, block_height: int, backgroundcolor: str, transaction_values: list,size_factor: int,seed=None,save_as_file=None):
+def create_image(width: int, height: int, color1: str, color2: str, number_of_circles: int, block_height: int, backgroundcolor: str, transaction_values: list,size_factor: int,seed=None):
 
     # Set the seed value for the random number generator
     if seed:
@@ -218,11 +218,7 @@ def create_image(width: int, height: int, color1: str, color2: str, number_of_ci
         draw_image = ImageDraw.Draw(image)
         draw_image.ellipse(circle_shape, fill=(int(red), int(green), int(blue)))
 
-    if save_as_file:
-        # Save the image
-        image.save(f'images/block_{block_height}_{width}px_{height}px.jpg')
-    else:
-        return image
+    return image
 
 
 
