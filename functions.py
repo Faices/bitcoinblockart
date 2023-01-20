@@ -5,26 +5,24 @@ import requests
 from datetime import datetime
 import math
 import numpy as np
-import webcolors
 from PIL import Image, ImageDraw, ImageFont
 from operator import itemgetter
-from instagrapi import Client
-from instagrapi.types import Usertag, Location
 from dotenv import load_dotenv
 import tempfile
+import webcolors
 import os
 import statistics
 from PIL import Image
-import io
-from lxml import etree
 from reportlab.graphics import renderPM
 import random
 from svgwrite import Drawing
 from svgwrite.shapes import Circle
-from svgwrite.utils import rgb
 import tweepy
 from svglib.svglib import svg2rlg
 from reportlab.graphics import renderPM
+import fitz
+from svglib import svglib
+from reportlab.graphics import renderPDF
 
 def blockimage_generator(save_image_svg = False, save_image_png = False, block_heigth = None, color = True):
 
@@ -129,7 +127,7 @@ def blockimage_generator(save_image_svg = False, save_image_png = False, block_h
         print(f"start convertig svg image to png conversion from block: {block_height}")
         input_file_path = f'images/block_{block_height}.svg'
         output_file_path = f'images/block_{block_height}.png'
-        svg_to_png_converter(input_file_path,output_file_path)
+        svg_to_png_converter2(input_file_path,output_file_path)
         time.sleep(0.1)
         print(f"start finished svg image to png conversion from block: {block_height}")
 
@@ -412,36 +410,6 @@ def create_image_svg_bicolor(width: int, height: int, color1: str, color2: str, 
 #     return dwg
 
 
-def post_image_on_instagram(image, caption, username=None, password=None):
-    """
-    Posts the given image on Instagram with the provided caption.
-    
-    Args:
-    - image (PIL.Image): The image to be posted on Instagram
-    - caption (str): The caption for the image
-    - username (str, Optional): The username of the Instagram account. Default is None.
-    - password (str, Optional): The password of the Instagram account. Default is None.
-    
-    Raises:
-    - ValueError: If the username and/or password is not provided
-
-    """
-    if not all([username, password]):
-        raise ValueError("username and password are required.")
-    
-    with tempfile.NamedTemporaryFile(suffix='.jpg', delete=False) as temp:
-        filepath = temp.name
-        image.save(filepath)
-    
-    # Create a new Client object and login
-    cl = Client()
-    cl.login(username, password)
-
-    # Post the image on Instagram
-    cl.photo_upload(filepath, caption=caption)
-    cl.logout()
-    os.remove(filepath)
-
 
 def generate_gif(folder_path):
     frames = []
@@ -501,6 +469,17 @@ def tweet_with_picture(text, picture, hashtags=None, user=None):
 def svg_to_png_converter(input_file_path,output_file_path):
     # read svg -> write png
     renderPM.drawToFile(svg2rlg(input_file_path), output_file_path, fmt='PNG')
+
+def svg_to_png_converter2(input_file_path,output_file_path):
+    # Convert svg to pdf in memory with svglib+reportlab
+    # directly rendering to png does not support transparency nor scaling
+    drawing = svglib.svg2rlg(path=input_file_path)
+    pdf = renderPDF.drawToString(drawing)
+
+    # Open pdf with fitz (pyMuPdf) to convert to PNG
+    doc = fitz.Document(stream=pdf)
+    pix = doc.load_page(0).get_pixmap(alpha=True, dpi=150)
+    pix.save(output_file_path)
 
 
 

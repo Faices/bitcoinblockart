@@ -1,13 +1,13 @@
-from functions import *
+import fitz
+from svglib import svglib
+from reportlab.graphics import renderPDF
 
-current_block_height = get_latest_block_height()
+# Convert svg to pdf in memory with svglib+reportlab
+# directly rendering to png does not support transparency nor scaling
+drawing = svglib.svg2rlg(path="images/block_772813.svg")
+pdf = renderPDF.drawToString(drawing)
 
-block_data = blockimage_generator(save_image_svg = True, save_image_png = True, block_heigth = current_block_height,color=False)
-
-print(block_data['block_datetime'])
-print(block_data['block_tx_count'])
-print(block_data['df_transaction_max'])
-print(block_data['transaction_values_total'])
-print(block_data['sats_vb'])
-
-print(block_data['block_datetime'].strftime("%Y-%m-%d"))
+# Open pdf with fitz (pyMuPdf) to convert to PNG
+doc = fitz.Document(stream=pdf)
+pix = doc.load_page(0).get_pixmap(alpha=False, dpi=300)
+pix.save("output.png")
