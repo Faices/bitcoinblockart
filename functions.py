@@ -1,4 +1,6 @@
 import pandas as pd
+import os
+import glob
 import time
 import random
 import requests
@@ -500,3 +502,8 @@ def generate_neon_hex_colors(seed):
 
     # Return the two colors as a tuple
     return (color1, color2)
+
+def whipe_folder():
+    files = glob.glob('images/*')
+    for f in files:
+        os.remove(f)
