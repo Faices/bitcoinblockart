@@ -1,5 +1,6 @@
 import pandas as pd
 import time
+import random
 import requests
 from datetime import datetime
 import math
@@ -10,96 +11,97 @@ from operator import itemgetter
 from instagrapi import Client
 from instagrapi.types import Usertag, Location
 from dotenv import load_dotenv
-import random
 import tempfile
 import os
 import statistics
 from PIL import Image
 import io
 from lxml import etree
-from svglib.svglib import svg2rlg
 from reportlab.graphics import renderPM
 import random
 from svgwrite import Drawing
 from svgwrite.shapes import Circle
 from svgwrite.utils import rgb
+import tweepy
+from svglib.svglib import svg2rlg
+from reportlab.graphics import renderPM
 
+def blockimage_generator(save_image_svg = False, save_image_png = False, block_heigth = None):
 
+    """
+    blockimage_generator((save_image_svg=False, block_height=None)
 
-def run(save_image_jpg = False, save_image_svg = False, post_instagram = False, block_heigth = None):
+    This function loads a block's data from the Bitcoin blockchain, and then processes it to generate various statistics, such as the median transaction fee and the total value of all transactions in the block. It also creates an SVG image of the block, using the block's data to determine the image's colors and number of circles.
+
+    Parameters:
+    save_image_svg (bool): Indicates whether the image should be saved to the 'images' folder. Default is False.
+    block_height (int): The height of the block to be processed. If not provided, the function will use the latest block height.
+
+    Returns:
+    A dictionary containing all the data processed from the block.
+    """
 
     load_dotenv('.env')
 
-    # load insta username and password
-    username = os.getenv('USERNAME')
-    password = os.getenv('PASSWORD')
+    # load global vars from .env
     secret_size_factor = os.getenv('SECRET_SIZE_FACTOR') # Secret parameter "secret_size_factor" for unique picture
     secret_seed = os.getenv('SECRET_SEED') # Secret parameter "secret_seed" for unique picture
 
-    # load specific block / to load latest just leave "None"
-    block_heigth = block_heigth
+    # load block data
+    block_height = block_heigth or get_latest_block_height()
+    block = get_block_data(block_height)
+    print(f"start loading block data from block: {block_height}")
 
-    # load block
-    if block_heigth is None:
-        # code to run if variable is None
-        block = get_block_data(get_latest_block_height())
-        print("loaded newest block")
-    else:
-        # code to run if variable is not None
-        block = get_block_data(block_heigth)
-        print(f"loaded block {block_heigth}")
-
-
-    # extract main values
     block_hash = block['blocks'][0]['hash']
-    block_height = block['blocks'][0]['height']
     block_tx_count = block['blocks'][0]['n_tx']
     block_fee = block['blocks'][0]['fee']
     block_time = block['blocks'][0]['time']
     block_datetime = convert_timestamp_to_datetime(block_time)
-    print(block_datetime)
+    # color_first = '#'+ block_hash[-6:]
+    # color_second = neon_color(color_first)
+    color_first,color_second = generate_neon_hex_colors(block_hash)
+    print(f"finished loading block data from block: {block_height}")
 
-    color_first = '#'+ block_hash[-6:]
-    print("first color: ",color_first)
-    color_second = neon_color(color_first)
-    print("second color: ",color_second)
-
+    print(f"start loading transaction data from block: {block_height}")
     # get transaction dataframe for the block
     df_transactions = get_transaction_data(block_height)
     df_transaction_min = min(df_transactions.value_outs_sum_btc)
     df_transaction_max = max(df_transactions.value_outs_sum_btc)
     df_transaction_max = round(df_transaction_max,1)
-    print(df_transaction_min,'=',df_transaction_max)
+    print(f"finished loading transaction data from block: {block_height}")
 
+    print(f"start calculation block statistics from block: {block_height}")
     # get transaction values as list in btc
     transaction_values = list(df_transactions.value_outs_sum_btc)
     transaction_fees = list(df_transactions.transaction_fee)
     transaction_fees_median = statistics.median(transaction_fees)
-    sats_vb = transaction_fees_median / block['blocks'][0]['n_tx']*10
-    sats_vb = round(sats_vb, 0)
-    print(transaction_fees_median)
-    print(sats_vb)
+    transaction_values_total = sum(transaction_values)
+    sats_vb = round(transaction_fees_median / block_tx_count*10, 0)
+    print(f"finished calculation block statistics from block: {block_height}")
 
-    
-    # image_svg = create_image_svg(
-    #     width = 9504,
-    #     height = 9504,
-    #     color = color_second,
-    #     #color1 = color_first,
-    #     #color2 = color_second,
-    #     number_of_circles = block_tx_count,
-    #     block_height = block_height,
-    #     backgroundcolor = '#000000',
-    #     transaction_values = transaction_values,
-    #     size_factor = int(secret_size_factor),
-    #     seed = int(secret_seed),
-    #     transparency = 100
-    #     )
+    # save all block data in a dictionary
+    block_data = {
+    'block_hash': block_hash,
+    'block_height': block_height,
+    'block_tx_count': block_tx_count,
+    'block_fee': block_fee,
+    'block_time': block_time,
+    'block_datetime': block_datetime,
+    'color_first': color_first,
+    'color_second': color_second,
+    'df_transaction_min': df_transaction_min,
+    'df_transaction_max': df_transaction_max,
+    'transaction_values': transaction_values,
+    'transaction_fees': transaction_fees,
+    'transaction_fees_median': transaction_fees_median,
+    'transaction_values_total': transaction_values_total,
+    'sats_vb': sats_vb
+    }
 
+    print(f"start generating svg image from block: {block_height}")
     image_svg =create_image_svg_bicolor(
         width = 2500,
         height = 2500,
-        #color = color_second,
         color1 = color_first,
         color2 = color_second,
         number_of_circles = block_tx_count,
@@ -107,21 +109,25 @@ def run(save_image_jpg = False, save_image_svg = False, post_instagram = False, 
         backgroundcolor = '#000000',
         transaction_values = transaction_values,
         size_factor = int(secret_size_factor),
-        seed = int(secret_seed),
-        transparency = 100
+        seed = int(secret_seed)
         )
-    
+    print(f"finished generating svg image from block: {block_height}")
+
 
     if save_image_svg is True:
+        print(f"start saving svg image from block: {block_height}")
         image_svg.saveas(f'images/block_{block_height}.svg')
+        print(f"finished saving svg image from block: {block_height}")
 
-    # if post_instagram is True:
-    #     # create instagram caption
-    #     caption = caption = f'#Bitcoin Block {block_height} at {block_datetime} had {block_tx_count} transactions and a average fee of ~ {sats_vb} sats/vB. The biggest transfer of a single transaction was {df_transaction_max} Bitcoin.'
-    #     print(caption)
-    #     #post on instagram
-    #     post_image_on_instagram(image=image_jpg, caption=caption,username=username,password=password)
+    if save_image_png is True:
+        print(f"start convertig svg image to png conversion from block: {block_height}")
+        input_file_path = f'images/block_{block_height}.svg'
+        output_file_path = f'images/block_{block_height}.png'
+        svg_to_png_converter(input_file_path,output_file_path)
+        print(f"start finished svg image to png conversion from block: {block_height}")
 
+
+    return block_data
 
 
 def get_latest_block_hash() -> str:
@@ -134,6 +140,7 @@ def get_latest_block_hash() -> str:
     url = "https://blockstream.info/api/blocks/tip/hash"
     response = requests.get(url)
     block_hash = response.text
+
     return block_hash
 
 
@@ -245,43 +252,6 @@ def get_radius_from_area(area: float) -> float:
 
 
 
-import random
-import colorsys
-
-# def generate_second_color(color, seed=None):
-#     """
-#     Generates a color that is more complementary to the input color.
-    
-#     Args:
-#     - color (str): The base color in hex format (e.g. "#ff0000").
-#     - seed (int, Optional): The seed value for the random number generator. Default is None.
-    
-#     Returns:
-#     - str: The generated complementary color in hex format.
-#     """
-#     r, g, b = int(color[1:3], 16), int(color[3:5], 16), int(color[5:7], 16)
-    
-#     # Set the seed value for the random number generator
-#     if seed:
-#         random.seed(seed)
-    
-#     # Convert input color to HSL
-#     h, s, l = colorsys.rgb_to_hls(r/255, g/255, b/255)
-
-#     # Adjust the hue to be opposite on the color wheel
-#     h += 0.5
-#     if h > 1:
-#         h -= 1
-
-#     # Convert the adjusted HSL color back to RGB
-#     r, g, b = colorsys.hls_to_rgb(h, s, l)
-
-#     # Clamp the RGB values to be between 0 and 255
-#     r, g, b = int(r*255), int(g*255), int(b*255)
-    
-#     second_color = "#{:02x}{:02x}{:02x}".format(r, g, b)
-#     return second_color
-
 
 def neon_color(hex_color: str) -> str:
     r, g, b = int(hex_color[1:3], 16), int(hex_color[3:5], 16), int(hex_color[5:7], 16)
@@ -329,7 +299,7 @@ def neon_color(hex_color: str) -> str:
 
 
 
-def create_image_svg_bicolor(width: int, height: int, color1: str, color2: str, number_of_circles: int, block_height: int, backgroundcolor: str, transaction_values: list, size_factor: int, transparency: int = 100, seed=None):
+def create_image_svg_bicolor(width: int, height: int, color1: str, color2: str, number_of_circles: int, block_height: int, backgroundcolor: str, transaction_values: list, size_factor: int, seed=None):
     if seed:
         random.seed(seed)
 
@@ -369,7 +339,7 @@ def create_image_svg_bicolor(width: int, height: int, color1: str, color2: str, 
         # Adjust the opacity of the circle based on the distance from the center
         if distance_from_center <= cube_size/2:
             # For circles in the middle, use a higher opacity
-            opacity = 0.90
+            opacity = 0.80
         else:
             # For circles further away from the center, use a lower opacity
             opacity = 0.90
@@ -474,3 +444,48 @@ def generate_gif(folder_path):
             frames.append(Image.open(file_path))
     # Save the frames as an animated GIF
     frames[0].save('animated.gif', format='gif', save_all=True, append_images=frames[1:])
+
+
+def tweet_with_picture(text, picture, user=None):
+    load_dotenv('.env')
+    consumer_key = os.getenv('APIKEY')
+    consumer_secret = os.getenv('APIKEYSECRET')
+    access_token = os.getenv('ACCESSTOKEN')
+    access_token_secret = os.getenv('ACCESSTOKENSECRET')
+    bearertoken = os.getenv('APIBEARERTOKEN')
+
+    client = tweepy.Client(bearertoken,consumer_key,consumer_secret,access_token,access_token_secret)
+    auth = tweepy.OAuth1UserHandler(consumer_key,consumer_secret,access_token,access_token_secret)
+    api = tweepy.API(auth)
+    media = api.media_upload(picture)
+    media_id = media.media_id_string
+
+    if user:
+        text = f"{text} @{user}"
+    client.create_tweet(text=text, media_ids=[media_id])
+
+
+
+def svg_to_png_converter(input_file_path,output_file_path):
+    # read svg -> write png
+    renderPM.drawToFile(svg2rlg(input_file_path), output_file_path, fmt='PNG')
+
+
+
+
+def generate_neon_hex_colors(seed):
+    '''Generates two harmonic neon hex colors and takes a 6 character hex number as input for a seed generation and returns 2 hex neon color.'''
+
+    # Convert seed to int
+    seed = int(seed[-6:], 16) #we use the bicoin hash as the seed to generate a unique color
+
+    # Generate two random numbers from the seed
+    rand1 = (seed * 2) % 0xFFFFFF
+    rand2 = (seed * 3) % 0xFFFFFF
+
+    # Create two harmonic colors from the random numbers
+    color1 = '#{:06x}'.format(rand1)
+    color2 = '#{:06x}'.format(rand2)
+
+    # Return the two colors as a tuple
+    return (color1, color2)
