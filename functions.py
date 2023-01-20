@@ -26,7 +26,7 @@ import tweepy
 from svglib.svglib import svg2rlg
 from reportlab.graphics import renderPM
 
-def blockimage_generator(save_image_svg = False, save_image_png = False, block_heigth = None):
+def blockimage_generator(save_image_svg = False, save_image_png = False, block_heigth = None, color = True):
 
     """
     blockimage_generator((save_image_svg=False, block_height=None)
@@ -59,7 +59,11 @@ def blockimage_generator(save_image_svg = False, save_image_png = False, block_h
     block_datetime = convert_timestamp_to_datetime(block_time)
     # color_first = '#'+ block_hash[-6:]
     # color_second = neon_color(color_first)
-    color_first,color_second = generate_neon_hex_colors(block_hash)
+    if color == True:
+        color_first,color_second = generate_neon_hex_colors(block_hash)
+    else:
+        color_first,color_second = ('#ffffff','#eeeeee')
+
     print(f"finished loading block data from block: {block_height}")
 
     print(f"start loading transaction data from block: {block_height}")
@@ -75,8 +79,8 @@ def blockimage_generator(save_image_svg = False, save_image_png = False, block_h
     transaction_values = list(df_transactions.value_outs_sum_btc)
     transaction_fees = list(df_transactions.transaction_fee)
     transaction_fees_median = statistics.median(transaction_fees)
-    transaction_values_total = sum(transaction_values)
-    sats_vb = round(transaction_fees_median / block_tx_count*10, 0)
+    transaction_values_total = round(sum(transaction_values),1)
+    sats_vb = int(round(transaction_fees_median / block_tx_count*10, 0))
     print(f"finished calculation block statistics from block: {block_height}")
 
     # save all block data in a dictionary
@@ -109,7 +113,8 @@ def blockimage_generator(save_image_svg = False, save_image_png = False, block_h
         backgroundcolor = '#000000',
         transaction_values = transaction_values,
         size_factor = int(secret_size_factor),
-        seed = int(secret_seed)
+        seed = int(block_height),
+        color = color
         )
     print(f"finished generating svg image from block: {block_height}")
 
@@ -118,12 +123,14 @@ def blockimage_generator(save_image_svg = False, save_image_png = False, block_h
         print(f"start saving svg image from block: {block_height}")
         image_svg.saveas(f'images/block_{block_height}.svg')
         print(f"finished saving svg image from block: {block_height}")
+        time.sleep(0.1)
 
     if save_image_png is True:
         print(f"start convertig svg image to png conversion from block: {block_height}")
         input_file_path = f'images/block_{block_height}.svg'
         output_file_path = f'images/block_{block_height}.png'
         svg_to_png_converter(input_file_path,output_file_path)
+        time.sleep(0.1)
         print(f"start finished svg image to png conversion from block: {block_height}")
 
 
@@ -299,7 +306,7 @@ def neon_color(hex_color: str) -> str:
 
 
 
-def create_image_svg_bicolor(width: int, height: int, color1: str, color2: str, number_of_circles: int, block_height: int, backgroundcolor: str, transaction_values: list, size_factor: int, seed=None):
+def create_image_svg_bicolor(width: int, height: int, color1: str, color2: str, number_of_circles: int, block_height: int, backgroundcolor: str, transaction_values: list, size_factor: int, seed=None,color = True):
     if seed:
         random.seed(seed)
 
@@ -346,10 +353,14 @@ def create_image_svg_bicolor(width: int, height: int, color1: str, color2: str, 
 
         circle = Circle(center=(x, y), r=circle_radius, fill=circle_color, opacity=opacity)
         dwg.add(circle)
-        
-    dwg.add(dwg.text(f'BLOCK  {str(block_height)}', insert=(width-200, height-50), fill='#36454F', font_size=20,font_family='Helvetica'))
-    dwg.add(dwg.text(f'Designed by bitcoinblockart', insert=(width-200, height-30), fill='#36454F', font_size=11.2,font_family='Helvetica'))
 
+    if color == True:
+        dwg.add(dwg.text(f'BLOCK  {str(block_height)}', insert=(width-200, height-50), fill='#36454F', font_size=20,font_family='Helvetica'))
+        dwg.add(dwg.text(f'Designed by bitcoinblockart', insert=(width-200, height-30), fill='#36454F', font_size=11.2,font_family='Helvetica'))
+    else:
+        dwg.add(dwg.text(f'BLOCK  {str(block_height)}', insert=(width-200, height-50), fill='#ffffff', font_size=20,font_family='Helvetica'))
+        dwg.add(dwg.text(f'Designed by bitcoinblockart', insert=(width-200, height-30), fill='#eeeeee', font_size=11.2,font_family='Helvetica'))
+    
     return dwg
 
 
@@ -446,7 +457,25 @@ def generate_gif(folder_path):
     frames[0].save('animated.gif', format='gif', save_all=True, append_images=frames[1:])
 
 
-def tweet_with_picture(text, picture, user=None):
+# def tweet_with_picture(text, picture, user=None):
+#     load_dotenv('.env')
+#     consumer_key = os.getenv('APIKEY')
+#     consumer_secret = os.getenv('APIKEYSECRET')
+#     access_token = os.getenv('ACCESSTOKEN')
+#     access_token_secret = os.getenv('ACCESSTOKENSECRET')
+#     bearertoken = os.getenv('APIBEARERTOKEN')
+
+#     client = tweepy.Client(bearertoken,consumer_key,consumer_secret,access_token,access_token_secret)
+#     auth = tweepy.OAuth1UserHandler(consumer_key,consumer_secret,access_token,access_token_secret)
+#     api = tweepy.API(auth)
+#     media = api.media_upload(picture)
+#     media_id = media.media_id_string
+
+#     if user:
+#         text = f"{text} @{user}"
+#     client.create_tweet(text=text, media_ids=[media_id])
+
+def tweet_with_picture(text, picture, hashtags=None, user=None):
     load_dotenv('.env')
     consumer_key = os.getenv('APIKEY')
     consumer_secret = os.getenv('APIKEYSECRET')
@@ -462,6 +491,9 @@ def tweet_with_picture(text, picture, user=None):
 
     if user:
         text = f"{text} @{user}"
+    if hashtags:
+        text = f"{text} {' '.join(['#' + h for h in hashtags])}"
+
     client.create_tweet(text=text, media_ids=[media_id])
 
 
