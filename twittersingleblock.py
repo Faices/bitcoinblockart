@@ -2,7 +2,7 @@ from functions import *
 import random
 
 # Store the current block height
-current_block_height = 109#get_latest_block_height()
+current_block_height = get_latest_block_height()
 
 while True:
     # Get the latest block height

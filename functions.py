@@ -478,7 +478,7 @@ def svg_to_png_converter2(input_file_path,output_file_path):
 
     # Open pdf with fitz (pyMuPdf) to convert to PNG
     doc = fitz.Document(stream=pdf)
-    pix = doc.load_page(0).get_pixmap(alpha=True, dpi=150)
+    pix = doc.load_page(0).get_pixmap(alpha=True, dpi=200)
     pix.save(output_file_path)
 
 
