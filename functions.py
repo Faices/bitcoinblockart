@@ -541,7 +541,12 @@ def generate_natural_hex_colors_white(seed=None):
         color2 = "#" + ''.join([random.choice('0123456789ABCDEF') for x in range(6)])
     return color1, color2
 
-
+def check_even_date():
+    today = datetime.datetime.now()
+    if today.day % 2 == 0:
+        return True
+    else:
+        return False
 
 def whipe_folder():
     files = glob.glob('images/*')
