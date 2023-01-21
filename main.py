@@ -14,11 +14,18 @@ def run():
             print("A new block has been generated! Block height:", latest_block_height)
             current_block_height = latest_block_height
 
+            #changes the background for 24 between black and white
+            evenday = check_even_date()
+            if evenday == False:
+                backgroundcolor = '#ffffff'
+            else:
+                backgroundcolor = '#000000'
+        
             #colormode = random.choice([True,False])
             colormode = True
 
             # generate svg and png image and return block statistics
-            block_data = blockimage_generator(save_image_svg = True, save_image_png = True, block_heigth = current_block_height,color=colormode)
+            block_data = blockimage_generator(save_image_svg = True, save_image_png = True, block_heigth = current_block_height,color=colormode,backgroundcolor=backgroundcolor)
 
             # post on twitter
             input_file_path = f'images/block_{current_block_height}.svg'
