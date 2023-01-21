@@ -3,6 +3,7 @@ import os
 import glob
 import time
 import random
+from random import randint
 import requests
 from datetime import datetime
 import math
@@ -26,7 +27,7 @@ import fitz
 from svglib import svglib
 from reportlab.graphics import renderPDF
 
-def blockimage_generator(save_image_svg = False, save_image_png = False, block_heigth = None, color = True):
+def blockimage_generator(save_image_svg = False, save_image_png = False, block_heigth = None, color = True, backgroundcolor = '#ffffff'):
 
     """
     blockimage_generator((save_image_svg=False, block_height=None)
@@ -52,17 +53,25 @@ def blockimage_generator(save_image_svg = False, save_image_png = False, block_h
     block = get_block_data(block_height)
     print(f"start loading block data from block: {block_height}")
 
-    block_hash = block['blocks'][0]['hash']
+    #block_hash = block['blocks'][0]['hash']
     block_tx_count = block['blocks'][0]['n_tx']
     block_fee = block['blocks'][0]['fee']
     block_time = block['blocks'][0]['time']
     block_datetime = convert_timestamp_to_datetime(block_time)
-    # color_first = '#'+ block_hash[-6:]
-    # color_second = neon_color(color_first)
-    if color == True:
-        color_first,color_second = generate_neon_hex_colors(block_hash)
+
+    if backgroundcolor == '#ffffff':
+        color_first,color_second = generate_natural_hex_colors_white(block_height)
+    
+    elif backgroundcolor == '#000000':
+        color_first,color_second = generate_neon_hex_colors_black(block_height)
+
     else:
+        color_first,color_second = generate_neon_hex_colors_black(block_height)
+
+    if color == False:
         color_first,color_second = ('#ffffff','#eeeeee')
+    else:
+        pass
 
     print(f"finished loading block data from block: {block_height}")
 
@@ -85,7 +94,7 @@ def blockimage_generator(save_image_svg = False, save_image_png = False, block_h
 
     # save all block data in a dictionary
     block_data = {
-    'block_hash': block_hash,
+    #'block_hash': block_hash,
     'block_height': block_height,
     'block_tx_count': block_tx_count,
     'block_fee': block_fee,
@@ -110,7 +119,7 @@ def blockimage_generator(save_image_svg = False, save_image_png = False, block_h
         color2 = color_second,
         number_of_circles = block_tx_count,
         block_height = block_height,
-        backgroundcolor = '#000000',
+        backgroundcolor = backgroundcolor,
         transaction_values = transaction_values,
         size_factor = int(secret_size_factor),
         seed = int(block_height),
@@ -258,15 +267,6 @@ def get_radius_from_area(area: float) -> float:
     return math.sqrt(area / math.pi)
 
 
-
-
-def neon_color(hex_color: str) -> str:
-    r, g, b = int(hex_color[1:3], 16), int(hex_color[3:5], 16), int(hex_color[5:7], 16)
-    r, g, b = min(255, int(r * 1.5)), min(255, int(g * 1.5)), min(255, int(b * 1.5))
-    return "#{:02x}{:02x}{:02x}".format(r, g, b)
-
-
-
 # def create_image(width: int, height: int, color1: str, color2: str, number_of_circles: int, block_height: int, backgroundcolor: str, transaction_values: list,size_factor: int,seed=None):
 
 #     # Set the seed value for the random number generator
@@ -305,20 +305,21 @@ def neon_color(hex_color: str) -> str:
 #     return image
 
 
-
 def create_image_svg_bicolor(width: int, height: int, color1: str, color2: str, number_of_circles: int, block_height: int, backgroundcolor: str, transaction_values: list, size_factor: int, seed=None,color = True):
     if seed:
         random.seed(seed)
 
     color1_rgb = webcolors.hex_to_rgb(color1)
     color2_rgb = webcolors.hex_to_rgb(color2)
-    backgroundcolor_rgb = webcolors.hex_to_rgb(backgroundcolor)
 
     dwg = Drawing(size=(width, height))
 
-    # Create a black background rectangle
-    dwg.add(dwg.rect((0,0), (width,height), fill='black'))
-    
+    if backgroundcolor != None:
+        dwg.add(dwg.rect((0,0), (width,height), fill=backgroundcolor))
+    else:
+        # Create a transparent background
+        dwg.add(dwg.rect((0,0), (width,height), fill='none'))
+
     center_x = width // 2
     center_y = height // 2
     cube_size = width/2.5
@@ -337,10 +338,8 @@ def create_image_svg_bicolor(width: int, height: int, color1: str, color2: str, 
         green = int(min(255,max(0,color1_rgb[1] + (color2_rgb[1] - color1_rgb[1]) * percent_x_y)))
         blue = int(min(255,max(0,color1_rgb[2] + (color2_rgb[2] - color1_rgb[2]) * percent_x_y)))
         circle_color = webcolors.rgb_to_hex((red, green, blue))
-        # circle = Circle(center=(x, y), r=circle_radius, fill=circle_color, fill_opacity= transparency/100)
-        # dwg.add(circle)
-
-                # Calculate the distance of the circle from the center
+        
+        # Calculate the distance of the circle from the center
         distance_from_center = math.sqrt((center_x - x)**2 + (center_y - y)**2)
 
         # Adjust the opacity of the circle based on the distance from the center
@@ -486,22 +485,63 @@ def svg_to_png_converter2(input_file_path,output_file_path):
 
 
 
-def generate_neon_hex_colors(seed):
-    '''Generates two harmonic neon hex colors and takes a 6 character hex number as input for a seed generation and returns 2 hex neon color.'''
+# def generate_neon_hex_colors(seed):
+#     '''Generates two harmonic neon hex colors and takes a 6 character hex number as input for a seed generation and returns 2 hex neon color.'''
 
-    # Convert seed to int
-    seed = int(seed[-6:], 16) #we use the bicoin hash as the seed to generate a unique color
+#     # Convert seed to int
+#     seed = str(seed)[-2:] #we use the bicoin hash as the seed to generate a unique color
+#     seed = int(seed)
 
-    # Generate two random numbers from the seed
-    rand1 = (seed * 2) % 0xFFFFFF
-    rand2 = (seed * 3) % 0xFFFFFF
+#     # Generate two random numbers from the seed
+#     rand1 = (seed * 2) % 0xFFFFFF
+#     rand2 = (seed * 3) % 0xFFFFFF
 
-    # Create two harmonic colors from the random numbers
-    color1 = '#{:06x}'.format(rand1)
-    color2 = '#{:06x}'.format(rand2)
+#     # Create two harmonic colors from the random numbers
+#     color1 = '#{:06x}'.format(rand1)
+#     color2 = '#{:06x}'.format(rand2)
 
-    # Return the two colors as a tuple
-    return (color1, color2)
+#     # Return the two colors as a tuple
+#     return (color1, color2)
+
+
+def generate_neon_hex_colors_black(seed=None):
+
+    if seed:
+        random.seed(seed)
+    
+    color1 = "#" + ''.join([random.choice('0123456789ABCDEF') for x in range(6)])
+    color2 = "#" + ''.join([random.choice('0123456789ABCDEF') for x in range(6)])
+
+    if (int(color1[1:3], 16) + int(color1[3:5], 16) + int(color1[5:7], 16)) < 500 and (int(color2[1:3], 16) + int(color2[3:5], 16) + int(color2[5:7], 16)) < 500:
+        return generate_neon_hex_colors()
+    else: 
+        return color1, color2
+
+# def generate_neon_hex_colors_white(seed=None):
+#     if seed:
+#         random.seed(seed)
+    
+#     color1 = "#" + ''.join([random.choice('0123456789ABCDEF') for x in range(6)])
+#     color2 = "#" + ''.join([random.choice('0123456789ABCDEF') for x in range(6)])
+
+#     while (int(color1[1:3], 16) + int(color1[3:5], 16) + int(color1[5:7], 16)) < 500 and (int(color2[1:3], 16) + int(color2[3:5], 16) + int(color2[5:7], 16)) < 500:
+#         color1 = "#" + ''.join([random.choice('0123456789ABCDEF') for x in range(6)])
+#         color2 = "#" + ''.join([random.choice('0123456789ABCDEF') for x in range(6)])
+
+#     return color1, color2
+
+def generate_natural_hex_colors_white(seed=None):
+    if seed:
+        random.seed(seed)
+    
+    color1 = "#" + ''.join([random.choice('0123456789ABCDEF') for x in range(6)])
+    color2 = "#" + ''.join([random.choice('0123456789ABCDEF') for x in range(6)])
+    while (int(color1[1:3], 16) + int(color1[3:5], 16) + int(color1[5:7], 16)) < 500 and (int(color2[1:3], 16) + int(color2[3:5], 16) + int(color2[5:7], 16)) < 500:
+        color1 = "#" + ''.join([random.choice('0123456789ABCDEF') for x in range(6)])
+        color2 = "#" + ''.join([random.choice('0123456789ABCDEF') for x in range(6)])
+    return color1, color2
+
+
 
 def whipe_folder():
     files = glob.glob('images/*')
